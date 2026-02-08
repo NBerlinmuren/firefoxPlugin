@@ -1,0 +1,52 @@
+/* === YouTube Shorts Blocker CSS ===
+   Injected at document_start to prevent flash of Shorts content.
+   Requires Firefox 121+ for :has() support. */
+
+/* Shorts shelf on homepage and search results */
+ytd-rich-shelf-renderer:has(a[href="/shorts"]),
+ytd-rich-shelf-renderer:has(a[href*="/shorts"]),
+ytd-reel-shelf-renderer {
+  display: none !important;
+}
+
+/* Shorts sidebar tab */
+ytd-guide-entry-renderer:has(a[href="/shorts"]),
+ytd-mini-guide-entry-renderer:has(a[href="/shorts"]) {
+  display: none !important;
+}
+
+/* Shorts in search results */
+ytd-video-renderer:has(a[href*="/shorts/"]),
+ytd-reel-item-renderer {
+  display: none !important;
+}
+
+/* Shorts in recommendations / related videos */
+ytd-compact-video-renderer:has(a[href*="/shorts/"]),
+ytd-grid-video-renderer:has(a[href*="/shorts/"]) {
+  display: none !important;
+}
+
+/* Shorts chip/tab in navigation bars */
+yt-chip-cloud-chip-renderer:has([title="Shorts"]),
+yt-chip-cloud-chip-renderer:has(yt-formatted-string[title="Shorts"]) {
+  display: none !important;
+}
+
+/* Shorts tab on channel pages */
+yt-tab-shape[tab-title="Shorts"],
+tp-yt-paper-tab:has(a[href*="/shorts"]) {
+  display: none !important;
+}
+
+/* Shorts notifications */
+ytd-notification-renderer:has(a[href*="/shorts/"]) {
+  display: none !important;
+}
+
+/* Mobile Shorts elements */
+ytm-reel-shelf-renderer,
+ytm-shorts-lockup-view-model,
+ytm-pivot-bar-item-renderer:has(a[href="/shorts"]) {
+  display: none !important;
+}

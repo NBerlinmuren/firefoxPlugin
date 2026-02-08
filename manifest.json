@@ -1,0 +1,42 @@
+{
+  "manifest_version": 2,
+  "name": "YouTube & Reddit Limiter",
+  "version": "1.0",
+  "description": "Blocks YouTube Shorts and limits time on YouTube (20 min) and Reddit (15 min) per rolling 3-hour window.",
+  "browser_specific_settings": {
+    "gecko": {
+      "strict_min_version": "121.0"
+    }
+  },
+  "permissions": [
+    "webRequest",
+    "webRequestBlocking",
+    "webNavigation",
+    "tabs",
+    "storage",
+    "*://*.youtube.com/*",
+    "*://*.reddit.com/*"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "css": ["content-shorts.css"],
+      "js": ["content-shorts.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.youtube.com/*", "*://*.reddit.com/*"],
+      "js": ["content-limit.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_title": "YouTube & Reddit Limiter"
+  },
+  "web_accessible_resources": ["blocked.html"]
+}

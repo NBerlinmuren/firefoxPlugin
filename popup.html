@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">YouTube &amp; Reddit Limiter</div>
+
+  <div class="site-card" id="youtube-card">
+    <div class="site-header">
+      <span class="site-name">YouTube</span>
+      <span class="site-time" id="youtube-time">0:00 / 20:00</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="youtube-bar"></div>
+    </div>
+    <div class="site-status" id="youtube-status">20:00 remaining</div>
+  </div>
+
+  <div class="site-card" id="reddit-card">
+    <div class="site-header">
+      <span class="site-name">Reddit</span>
+      <span class="site-time" id="reddit-time">0:00 / 15:00</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="reddit-bar"></div>
+    </div>
+    <div class="site-status" id="reddit-status">15:00 remaining</div>
+  </div>
+
+  <div class="shorts-badge">YouTube Shorts: Always Blocked</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
