@@ -1,0 +1,56 @@
+name: Release Firefox Extension
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from manifest
+        id: meta
+        run: |
+          VERSION=$(jq -r '.version' manifest.json)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Build .xpi package
+        run: |
+          zip -r youtube-reddit-limiter-${{ steps.meta.outputs.version }}.xpi \
+            manifest.json \
+            background.js \
+            popup.html \
+            popup.js \
+            popup.css \
+            blocked.html \
+            blocked.js \
+            content-shorts.js \
+            content-shorts.css \
+            content-limit.js
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.meta.outputs.version }}
+          name: YouTube & Reddit Limiter v${{ steps.meta.outputs.version }}
+          body: |
+            ## Install in Firefox
+
+            1. Download the `.xpi` file below
+            2. Open Firefox and go to `about:addons`
+            3. Click the gear icon → **Install Add-on From File…**
+            4. Select the downloaded `.xpi` file
+
+            Or drag and drop the `.xpi` file into a Firefox window.
+
+            ---
+            Built from commit `${{ steps.meta.outputs.short_sha }}`
+          files: youtube-reddit-limiter-${{ steps.meta.outputs.version }}.xpi
+          make_latest: true
