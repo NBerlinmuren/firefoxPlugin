@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "YouTube & Reddit Limiter",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Blocks YouTube Shorts and limits time on YouTube (20 min) and Reddit (15 min) per rolling 3-hour window.",
   "browser_specific_settings": {
     "gecko": {
