@@ -30,6 +30,11 @@
       "run_at": "document_start"
     },
     {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content-youtube-video.js"],
+      "run_at": "document_idle"
+    },
+    {
       "matches": ["*://*.youtube.com/*", "*://*.reddit.com/*"],
       "js": ["content-limit.js"],
       "run_at": "document_idle"

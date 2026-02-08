@@ -19,6 +19,8 @@ let activeTabDomain = null; // normalized domain of active tab, or null
 let activeTabUrl = null;
 let windowFocused = true;
 let currentSegment = null;  // {domain, start, end} for the ongoing tracking segment
+let youtubeVideoSegment = null; // {domain: "youtube.com", start, end} for background video play
+let youtubePlayingTabIds = new Set(); // tab IDs with playing YouTube videos
 let lastTickTime = Date.now();
 let dirty = false; // whether segments need persisting
 
@@ -128,6 +130,15 @@ function getUsageSeconds(domain) {
     }
   }
 
+  // Include YouTube video segment (background video play tracking)
+  if (domain === "youtube.com" && youtubeVideoSegment) {
+    const overlapStart = Math.max(youtubeVideoSegment.start, windowStart);
+    const overlapEnd = Math.min(youtubeVideoSegment.end, now);
+    if (overlapEnd > overlapStart) {
+      total += overlapEnd - overlapStart;
+    }
+  }
+
   return total / 1000;
 }
 
@@ -149,6 +160,9 @@ function getCooldownEnd(domain) {
   let allSegs = [...(segments[domain] || [])];
   if (currentSegment && currentSegment.domain === domain) {
     allSegs.push({ start: currentSegment.start, end: currentSegment.end });
+  }
+  if (domain === "youtube.com" && youtubeVideoSegment) {
+    allSegs.push({ start: youtubeVideoSegment.start, end: youtubeVideoSegment.end });
   }
   allSegs = allSegs.filter(s => s.end > windowStart);
   allSegs.sort((a, b) => a.start - b.start);
@@ -203,34 +217,79 @@ function finalizeSegment() {
   currentSegment = null;
 }
 
+// === YouTube Video Segment (play-based, independent of focus) ===
+function maybeStartYoutubeVideoSegment() {
+  if (youtubeVideoSegment) return; // Already tracking
+  if (youtubePlayingTabIds.size === 0) return; // No video playing
+  // Don't use this if currentSegment is already tracking YouTube (avoid double-counting)
+  if (currentSegment && currentSegment.domain === "youtube.com") return;
+  if (isLimitExceeded("youtube.com")) return;
+
+  const now = Date.now();
+  youtubeVideoSegment = { domain: "youtube.com", start: now, end: now };
+}
+
+function finalizeYoutubeVideoSegment() {
+  if (!youtubeVideoSegment) return;
+  if (youtubeVideoSegment.end - youtubeVideoSegment.start > 100) {
+    segments["youtube.com"].push({
+      start: youtubeVideoSegment.start,
+      end: youtubeVideoSegment.end
+    });
+    dirty = true;
+  }
+  youtubeVideoSegment = null;
+}
+
+function enforceYoutubeLimitAllTabs() {
+  const blockedUrl = getBlockedUrl("timelimit", "youtube.com");
+  browser.tabs.query({ url: "*://*.youtube.com/*" }).then(tabs => {
+    for (const tab of tabs) {
+      browser.tabs.update(tab.id, { url: blockedUrl }).catch(() => {});
+    }
+  }).catch(() => {});
+  youtubePlayingTabIds.clear();
+}
+
 // === Tick (runs every 1s) ===
 function tick() {
   const now = Date.now();
   const elapsed = now - lastTickTime;
+  const isGap = elapsed > GAP_THRESHOLD;
 
   if (currentSegment) {
-    if (elapsed > GAP_THRESHOLD) {
-      // Gap detected (machine sleep/suspend) — close segment at last tick time
+    if (isGap) {
       currentSegment.end = lastTickTime;
       finalizeSegment();
-      // Start new segment if conditions still hold
-      lastTickTime = now;
-      maybeStartSegment();
-      return;
+    } else {
+      currentSegment.end = now;
+      if (isLimitExceeded(currentSegment.domain)) {
+        const domain = currentSegment.domain;
+        finalizeSegment();
+        enforceLimit(domain);
+      }
     }
+  }
 
-    // Update current segment end
-    currentSegment.end = now;
-
-    // Check if limit is now exceeded
-    if (isLimitExceeded(currentSegment.domain)) {
-      const domain = currentSegment.domain;
-      finalizeSegment();
-      enforceLimit(domain);
+  if (youtubeVideoSegment) {
+    if (isGap) {
+      youtubeVideoSegment.end = lastTickTime;
+      finalizeYoutubeVideoSegment();
+    } else {
+      youtubeVideoSegment.end = now;
+      if (isLimitExceeded("youtube.com")) {
+        finalizeYoutubeVideoSegment();
+        enforceYoutubeLimitAllTabs();
+      }
     }
   }
 
   lastTickTime = now;
+
+  if (isGap) {
+    maybeStartSegment();
+    maybeStartYoutubeVideoSegment();
+  }
 }
 
 // === Enforcement ===
@@ -318,14 +377,34 @@ browser.tabs.onActivated.addListener(activeInfo => {
   browser.tabs.get(activeInfo.tabId).then(tab => {
     activeTabUrl = tab.url || null;
     activeTabDomain = normalizeDomain(tab.url);
+
+    if (activeTabDomain === "youtube.com") {
+      // Switching TO YouTube: currentSegment takes over, stop video segment
+      finalizeYoutubeVideoSegment();
+    } else {
+      // Switching AWAY from YouTube: start video segment if a video is playing
+      maybeStartYoutubeVideoSegment();
+    }
+
     maybeStartSegment();
   }).catch(() => {
     activeTabUrl = null;
     activeTabDomain = null;
+    maybeStartYoutubeVideoSegment();
   });
 });
 
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  // Clean up YouTube playing state if a tab navigates away from YouTube
+  if (changeInfo.url && youtubePlayingTabIds.has(tabId)) {
+    if (normalizeDomain(changeInfo.url) !== "youtube.com") {
+      youtubePlayingTabIds.delete(tabId);
+      if (youtubePlayingTabIds.size === 0) {
+        finalizeYoutubeVideoSegment();
+      }
+    }
+  }
+
   if (tabId !== activeTabId) return;
   if (!changeInfo.url) return;
 
@@ -340,6 +419,11 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 browser.tabs.onRemoved.addListener(tabId => {
+  // Clean up YouTube playing state
+  if (youtubePlayingTabIds.delete(tabId) && youtubePlayingTabIds.size === 0) {
+    finalizeYoutubeVideoSegment();
+  }
+
   if (tabId !== activeTabId) return;
   finalizeSegment();
   activeTabId = null;
@@ -352,6 +436,8 @@ browser.windows.onFocusChanged.addListener(windowId => {
     // Browser lost focus
     windowFocused = false;
     finalizeSegment();
+    // If YouTube was focused and a video is playing, switch to video segment
+    maybeStartYoutubeVideoSegment();
   } else {
     windowFocused = true;
     // Re-query active tab in the focused window
@@ -361,6 +447,10 @@ browser.windows.onFocusChanged.addListener(windowId => {
         activeTabUrl = tabs[0].url || null;
         activeTabDomain = normalizeDomain(tabs[0].url);
       }
+      // If switching to YouTube tab, currentSegment takes over
+      if (activeTabDomain === "youtube.com") {
+        finalizeYoutubeVideoSegment();
+      }
       maybeStartSegment();
     }).catch(() => {});
   }
@@ -368,6 +458,20 @@ browser.windows.onFocusChanged.addListener(windowId => {
 
 // === Message API ===
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "youtubeVideoState") {
+    const tabId = sender.tab.id;
+    if (message.playing) {
+      youtubePlayingTabIds.add(tabId);
+      maybeStartYoutubeVideoSegment();
+    } else {
+      youtubePlayingTabIds.delete(tabId);
+      if (youtubePlayingTabIds.size === 0) {
+        finalizeYoutubeVideoSegment();
+      }
+    }
+    return;
+  }
+
   if (message.type === "getStatus") {
     const status = {};
     for (const domain of Object.keys(LIMITS)) {
