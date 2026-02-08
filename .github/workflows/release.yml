@@ -13,6 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install web-ext
+        run: npm install -g web-ext
+
       - name: Read version from manifest
         id: meta
         run: |
@@ -21,19 +29,24 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Build .xpi package
+      - name: Sign extension with Mozilla
         run: |
-          zip -r youtube-reddit-limiter-${{ steps.meta.outputs.version }}.xpi \
-            manifest.json \
-            background.js \
-            popup.html \
-            popup.js \
-            popup.css \
-            blocked.html \
-            blocked.js \
-            content-shorts.js \
-            content-shorts.css \
-            content-limit.js
+          web-ext sign \
+            --source-dir . \
+            --artifacts-dir ./artifacts \
+            --api-key "$AMO_API_KEY" \
+            --api-secret "$AMO_API_SECRET" \
+            --channel unlisted
+        env:
+          AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
+          AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+
+      - name: Find signed .xpi
+        id: xpi
+        run: |
+          XPI_PATH=$(ls ./artifacts/*.xpi)
+          echo "path=$XPI_PATH" >> "$GITHUB_OUTPUT"
+          echo "filename=$(basename "$XPI_PATH")" >> "$GITHUB_OUTPUT"
 
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
@@ -52,5 +65,5 @@ jobs:
 
             ---
             Built from commit `${{ steps.meta.outputs.short_sha }}`
-          files: youtube-reddit-limiter-${{ steps.meta.outputs.version }}.xpi
+          files: ${{ steps.xpi.outputs.path }}
           make_latest: true

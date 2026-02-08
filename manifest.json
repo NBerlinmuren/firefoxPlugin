@@ -5,6 +5,7 @@
   "description": "Blocks YouTube Shorts and limits time on YouTube (20 min) and Reddit (15 min) per rolling 3-hour window.",
   "browser_specific_settings": {
     "gecko": {
+      "id": "youtube-reddit-limiter@nberlinmuren",
       "strict_min_version": "121.0"
     }
   },
